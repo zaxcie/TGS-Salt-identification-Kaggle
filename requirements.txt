@@ -1,0 +1,12 @@
+# local package
+-e .
+
+# external requirements
+Keras
+scikit-learn
+scikit-image
+pandas
+numpy
+scipy
+tensorflow
+
