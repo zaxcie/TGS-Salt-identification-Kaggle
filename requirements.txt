@@ -6,6 +6,7 @@ Keras
 scikit-learn
 scikit-image
 pandas
+mlflow
 numpy
 scipy
 tensorflow
