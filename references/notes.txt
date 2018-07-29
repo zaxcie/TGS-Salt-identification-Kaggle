@@ -1,0 +1,14 @@
+# Note I want to start with something simple inf term of network archtiecture
+# Note Simple Depths usage
+    - U-Net
+
+# TODO
+    - Produce submission csv (RLE mask)
+    - MLFlow integration
+    - U-Net grid search preparation
+
+# Idea use CRF as post processing
+# Idea Could be a good idea to link mlflow with tensorboard.
+    I'm thinking end of epoch metrics and these kind of things... Not for now
+
+

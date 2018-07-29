@@ -1,37 +1,98 @@
 from tgs.models.UNet import get_unet
-from keras.callbacks import ModelCheckpoint
 from tgs.data.images import HEIGHT, WIDTH, Image, ImageSet
 from tgs.data.split import get_train_val_ids
+from tgs.utils.mlflow import find_or_create_experiment
 
-from sklearn.model_selection import train_test_split
+from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, History
 
+import mlflow
 import os
-import random as rdm
+import json
+
 # TODO MLFlow
+# TODO Parse arguments
 
 
 if __name__ == '__main__':
-    model = get_unet((HEIGHT, WIDTH, 1))
-    model_checkpoint = ModelCheckpoint('unet_membrane.hdf5', monitor='loss', verbose=1, save_best_only=True)
+    EXP_NAME = "UNet"
+    exp = find_or_create_experiment(EXP_NAME, mlflow.tracking.list_experiments())
+    if isinstance(exp, list):
+        raise TypeError("Multiple experiment with that name where found.")  # Not sure it's possible tho
 
-    imgs_train = list()
-    imgs_val = list()
+    with mlflow.start_run(experiment_id=exp.experiment_id):
+        active_run = mlflow.active_run()
 
-    img_path = "data/raw/train"
+        # Idea Could be cool to have a wrapper for this...
+        # Parameters
 
-    # TODO Later - Cache ImageSet object
-    train_ids, val_ids = get_train_val_ids(img_path + "/images/")
-    for img_id in os.listdir(img_path + "/images/"):
-        if img_id in train_ids:
-            imgs_train.append(Image(img_id, img_path))
+        loss = "binary_crossentropy"
+        mlflow.log_param("loss", loss)
+
+        optimizer = "adam"
+        mlflow.log_param("optimizer", optimizer)
+
+        es_patience = 3
+        mlflow.log_param("es_parience", es_patience)
+
+        exp_type = "unittest"
+        mlflow.log_param("exp_type", exp_type)
+
+        batch_size = 32
+        mlflow.log_param("batch_size", batch_size)
+
+        epochs = 2
+        mlflow.log_param("epochs", epochs)
+
+        # Callbacks
+        early_stopping = EarlyStopping(monitor='val_loss',
+                                       min_delta=0,
+                                       patience=es_patience,
+                                       verbose=1, mode='auto')
+        tensorboard = TensorBoard(log_dir=active_run.info.artifact_uri, histogram_freq=0,
+                                  write_graph=True, write_images=True)
+        checkpoint = ModelCheckpoint(active_run.info.artifact_uri + "/model.h5",
+                                     monitor='val_loss', verbose=1, save_best_only=True,
+                                     save_weights_only=False, mode='auto', period=1)
+        history = History()
+        callbacks = [early_stopping, tensorboard, checkpoint, history]
+
+        model = get_unet((HEIGHT, WIDTH, 1))
+
+        imgs_train = list()
+        imgs_val = list()
+
+        img_path = "data/raw/train"
+
+        # TODO Later - Cache ImageSet object numpy save
+        train_ids, val_ids = get_train_val_ids(img_path + "/images/")
+        for img_id in os.listdir(img_path + "/images/"):
+            if img_id in train_ids:
+                imgs_train.append(Image(img_id, img_path))
+            else:
+                imgs_val.append(Image(img_id, img_path))
+
+        trainset = ImageSet(imgs_train, HEIGHT, WIDTH, 1)
+        valset = ImageSet(imgs_val, HEIGHT, WIDTH, 1)
+
+        X_train, y_train = trainset.get_x_y()
+        X_val, y_val = valset.get_x_y()
+
+        model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy'])
+        print(model.summary())
+
+        with open(active_run.info.artifact_uri + "/network_architecture.json", "w") as f:
+            json.dump(model.to_json(), f)
+
+        if exp_type == "unittest":
+            n = 16
         else:
-            imgs_val.append(Image(img_id, img_path))
+            n = len(X_train)
 
-    trainset = ImageSet(imgs_train, HEIGHT, WIDTH, 1)
-    valset = ImageSet(imgs_val, HEIGHT, WIDTH, 1)
+        model.fit(x=X_train[:n], y=y_train[:n], epochs=epochs, verbose=1, callbacks=callbacks,
+                  validation_data=(X_val, y_val), batch_size=batch_size)
 
-    X_train, y_train = trainset.get_x_y()
-    X_val, y_val = valset.get_x_y()
+        for metric in history.history:
+            for i in range(len(history.history[metric])):
+                mlflow.log_metric(metric, history.history[metric][i])
+        mlflow.log_metric("trained_epoch", len(history.history["loss"]))
 
-    model.fit(x=X_train, y=y_train, epochs=10, verbose=1, callbacks=[model_checkpoint],
-              validation_data=(X_val, y_val), batch_size=32)
