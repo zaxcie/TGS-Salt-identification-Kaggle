@@ -2,6 +2,7 @@ from tgs.models.UNet import get_unet
 from tgs.data.images import HEIGHT, WIDTH, Image, ImageSet
 from tgs.data.split import get_train_val_ids
 from tgs.utils.mlflow import find_or_create_experiment
+from tgs.utils.metrics import tf_mean_iou
 
 from keras.callbacks import ModelCheckpoint, TensorBoard, EarlyStopping, History
 
@@ -28,7 +29,7 @@ if __name__ == '__main__':
         loss = "binary_crossentropy"
         mlflow.log_param("loss", loss)
 
-        optimizer = "adam"
+        optimizer = "SGD"
         mlflow.log_param("optimizer", optimizer)
 
         es_patience = 3
@@ -40,7 +41,7 @@ if __name__ == '__main__':
         batch_size = 32
         mlflow.log_param("batch_size", batch_size)
 
-        epochs = 2
+        epochs = 1000
         mlflow.log_param("epochs", epochs)
 
         # Callbacks
@@ -77,7 +78,7 @@ if __name__ == '__main__':
         X_train, y_train = trainset.get_x_y()
         X_val, y_val = valset.get_x_y()
 
-        model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy'])
+        model.compile(optimizer=optimizer, loss=loss, metrics=['accuracy', tf_mean_iou])
         print(model.summary())
 
         with open(active_run.info.artifact_uri + "/network_architecture.json", "w") as f:
@@ -87,6 +88,8 @@ if __name__ == '__main__':
             n = 16
         else:
             n = len(X_train)
+
+        # Launch training
 
         model.fit(x=X_train[:n], y=y_train[:n], epochs=epochs, verbose=1, callbacks=callbacks,
                   validation_data=(X_val, y_val), batch_size=batch_size)
