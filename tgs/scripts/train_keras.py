@@ -84,6 +84,7 @@ if __name__ == '__main__':
         with open(active_run.info.artifact_uri + "/network_architecture.json", "w") as f:
             json.dump(model.to_json(), f)
 
+        # TODO unit testesting should be done differently
         if exp_type == "unittest":
             n = 16
         else:

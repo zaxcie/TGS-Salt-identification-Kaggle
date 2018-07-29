@@ -4,7 +4,7 @@
 
 # TODO
     - Produce submission csv (RLE mask)
-    - MLFlow integration
+    - Produce training report
     - U-Net grid search preparation
 
 # Idea use CRF as post processing
